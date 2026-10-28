@@ -165,7 +165,7 @@ public sealed class WorktreeReviewApp
             if (latestStatus.HasChanges && !ConfirmDirtyWorktreeRemoval(latestStatus))
                 return;
 
-            _git.RemoveWorktree(repo.Path, worktree.Path);
+            RemoveWorktreeWithFallback(repo.Path, worktree.Path);
             DeleteReviewBranchIfSafe(repo.Path, worktree.Branch);
             _git.PruneWorktrees(repo.Path);
 
@@ -241,6 +241,25 @@ public sealed class WorktreeReviewApp
         _logger.Success(_dryRun.IsEnabled
             ? $"Review branch delete planned: {branchName}"
             : $"Deleted local review branch: {branchName}");
+    }
+
+    private void RemoveWorktreeWithFallback(string repoPath, string worktreePath)
+    {
+        try
+        {
+            _git.RemoveWorktree(repoPath, worktreePath);
+        }
+        catch (GitCommandException)
+        {
+            _logger.Warning("git worktree remove failed. Attempting fallback cleanup...");
+            _git.PruneWorktrees(repoPath);
+
+            if (!_dryRun.IsEnabled && Directory.Exists(worktreePath))
+            {
+                Directory.Delete(worktreePath, true);
+                _logger.Success($"Deleted leftover directory: {worktreePath}");
+            }
+        }
     }
 
     private bool ConfirmDirtyWorktreeRemoval(WorktreeDisplayItem item)

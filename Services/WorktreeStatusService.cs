@@ -18,9 +18,7 @@ public sealed class WorktreeStatusService
 
     public WorktreeDisplayItem GetStatus(GitWorktree worktree)
     {
-        var statusOutput = Directory.Exists(worktree.Path)
-            ? _git.GetStatusPorcelain(worktree.Path)
-            : "";
+        var statusOutput = GetStatusOutputSafe(worktree.Path);
 
         var changedFiles = statusOutput
             .Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries)
@@ -33,6 +31,30 @@ public sealed class WorktreeStatusService
             ChangedFiles = changedFiles,
             LastModified = GetLastModified(worktree.Path)
         };
+    }
+
+    private string GetStatusOutputSafe(string worktreePath)
+    {
+        if (!Directory.Exists(worktreePath))
+            return "";
+
+        if (!IsGitLinked(worktreePath))
+            return "";
+
+        try
+        {
+            return _git.GetStatusPorcelain(worktreePath);
+        }
+        catch
+        {
+            return "";
+        }
+    }
+
+    private static bool IsGitLinked(string worktreePath)
+    {
+        var gitPath = Path.Combine(worktreePath, ".git");
+        return File.Exists(gitPath) || Directory.Exists(gitPath);
     }
 
     private static DateTime? GetLastModified(string path)
